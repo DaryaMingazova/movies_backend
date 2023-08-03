@@ -1,3 +1,4 @@
+const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const { errors } = require('celebrate');
@@ -28,3 +29,5 @@ app.use(errorLogger);
 app.use(errors());
 // обрабатываем централизованно ошибки
 app.use(centralError);
+
+app.listen(PORT);

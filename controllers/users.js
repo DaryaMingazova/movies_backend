@@ -1,161 +1,108 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
-const NotFoundError = require('../errors/NotFoundError');
-const ValidationError = require('../errors/ValidationError');
 const ConflictError = require('../errors/ConflictError');
+const ValidationError = require('../errors/ValidationError');
 const UnauthorizedError = require('../errors/UnauthorizedError');
-const { devSecretKey } = require('../utils/constants');
+const NotFoundError = require('../errors/NotFoundError');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 
-const getUsers = (req, res, next) => {
-  User.find({})
-    .then((users) => {
-      res.send(users);
-    })
-    .catch((err) => {
-      next(err);
-    });
+const login = (req, res, next) => {
+  const { email, password } = req.body;
+
+  return User.findUserByCredentials(email, password)
+    .then((user) => {
+      const token = jwt.sign(
+        { _id: user._id },
+        NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret',
+        { expiresIn: '7d' },
+      );
+
+      res.send({ token });
+    }).catch((err) => next(new UnauthorizedError(err.message)));
 };
 
 const getUser = (req, res, next) => {
-  User.findById(req.params.userId)
+  const userId = req.user._id;
+  User.findById(userId)
     .then((user) => {
       if (!user) {
-        throw new NotFoundError('Пользователь не найден');
+        throw new NotFoundError(
+          'Пользователь по указанному id не найден.',
+        );
       }
-
-      res.send(user);
+      return res.send(user);
     })
     .catch((err) => {
-      if (err.name === 'CastError') {
-        return next(new ValidationError('Некорректный id пользователя'));
+      if (err.kind === 'ObjectId') {
+        next(new ValidationError('Некорректный формат id.'));
+      } else {
+        next(err);
       }
-
-      return next(err);
-    });
-};
-
-const getMe = (req, res, next) => {
-  User.findById(req.user._id)
-    .then((user) => {
-      if (!user) {
-        throw new NotFoundError('Пользователь не найден');
-      }
-      return res.send({ data: user });
-    })
-    .catch((err) => {
-      return next(err);
     });
 };
 
 const createUser = (req, res, next) => {
   const {
-    name, about, avatar, email, password,
+    name, email, password,
   } = req.body;
 
   bcrypt.hash(password, 10)
-    .then((hash) => User.create({
-      name, about, avatar, email, password: hash,
-    }))
+    .then((hash) => User.create(
+      {
+        name, email, password: hash,
+      },
+    ))
     .then((user) => {
-      if (!user) {
-        throw new NotFoundError('Пользователь не найден');
-      }
-
-      res.send({
-        _id: user._id,
-        name: user.name,
-        about: user.about,
-        avatar: user.avatar,
-        email: user.email,
-      });
+      res.send(user);
     })
     .catch((err) => {
-      if (err.name === 'ValidationError') {
-        return next(new ValidationError('Переданы некорректные данные в метод создания пользователя'));
-      }
-
       if (err.code === 11000) {
-        return next(new ConflictError('Пользователь с таким email уже существует'));
+        next(new ConflictError(
+          `Пользователь с email '${email}' уже существует.`,
+        ));
+      } else if (err.name === 'ValidationError') {
+        next(new ValidationError('Переданы некорректные данные при создании пользователя.'));
+      } else {
+        next(err);
       }
-
-      return next(err);
     });
 };
 
-const updateProfile = (req, res, next) => {
-  const { name, about } = req.body;
+const updateUser = (req, res, next) => {
+  const { name, email } = req.body;
 
-  User.findByIdAndUpdate(req.user._id, { name, about }, { new: true, runValidators: true })
+  User.findByIdAndUpdate(
+    req.user._id,
+    { name, email },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
     .then((user) => {
       if (!user) {
-        throw new NotFoundError('Пользователь не найден');
+        throw new NotFoundError(
+          'Пользователь по указанному id не найден.',
+        );
       }
 
-      res.send(user);
+      return res.send(user);
     })
     .catch((err) => {
-      if (err.name === 'ValidationError') {
-        return next(new ValidationError('Переданы некорректные данные в метод обновления профиля пользователя'));
+      if (err.code === 11000) {
+        next(new ConflictError(
+          `Пользователь с email '${email}' уже существует.`,
+        ));
+      } else if (err.name === 'ValidationError') {
+        next(new ValidationError('Переданы некорректные данные при обновлении профиля.'));
+      } else {
+        next(err);
       }
-
-      return next(err);
-    });
-};
-
-const updateAvatar = (req, res, next) => {
-  const { avatar } = req.body;
-
-  User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
-    .then((user) => {
-      if (!user) {
-        throw new NotFoundError('Пользователь не найден');
-      }
-
-      res.send(user);
-    })
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        return next(new ValidationError('Переданы некорректные данные в метод обновления аватара пользователя'));
-      }
-
-      return next(err);
-    });
-};
-
-const login = (req, res, next) => {
-  const { email, password } = req.body;
-
-  User.findOne({ email }).select('+password')
-    .then((user) => {
-      if (!user) {
-        throw new UnauthorizedError('Неправильные логин или пароль');
-      }
-
-      return bcrypt.compare(password, user.password)
-        .then((matched) => {
-          if (!matched) {
-            throw new UnauthorizedError('Неправильные логин или пароль');
-          }
-
-          const token = jwt.sign({ _id: user._id }, (NODE_ENV === 'production') ? JWT_SECRET : devSecretKey, { expiresIn: '7d' });
-
-          res.send({ token });
-        });
-    })
-    .catch((err) => {
-      next(err);
     });
 };
 
 module.exports = {
-  getUsers,
-  getUser,
-  getMe,
-  createUser,
-  updateProfile,
-  updateAvatar,
-  login,
+  login, getUser, createUser, updateUser,
 };

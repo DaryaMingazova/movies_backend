@@ -2,7 +2,7 @@ const path = require('path');
 
 // Массив доменов, с которых разрешены кросс-доменные запросы
 const allowedCors = [
-  'https://movies.nomoreparties.co',
+   'https://movies.nomoreparties.co',
   'https://api.movies.nomoreparties.co',
   'http://movies.nomoreparties.co',
   'http://api.movies.nomoreparties.co',
