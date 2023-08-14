@@ -19,7 +19,7 @@
 - Реализовано логирование
 
 ### Макет figma
-https://www.figma.com/file/ckBaT8hbf1OYNvWn3f4Brc/light-2?type=design&node-id=891-3857&mode=design&t=4QS8qzUYNPkVb09N-0
+https://www.figma.com/file/f4KX5DIEoLWJEB7BcSOyPq/dark-4?type=design&node-id=891-3857&mode=design&t=Rgdbwm42ny08dqA6-0
 
 ## Ссылки:
 - [IP] http://51.250.84.88
